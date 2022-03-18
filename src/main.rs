@@ -2,8 +2,9 @@ use std::io::{Read, Write};
 
 use anyhow::{Result, Context, bail};
 use prost::Message;
-use prost_build::Config;
 use prost_types::compiler::{CodeGeneratorRequest, CodeGeneratorResponse, code_generator_response::File};
+
+mod args;
 
 fn main() {
     let res = match gen_files() {
@@ -25,7 +26,8 @@ fn gen_files() -> Result<Vec<File>> {
         Err(e) => bail!("Failed to decode CodeGeneratorRequest: {e:?}"),
     };
 
-    let modules = Config::new().generate(req.proto_file).context("Failed to generate Rust code")?;
+    let mut config = args::config_from_args(req.parameter())?;
+    let modules = config.generate(req.proto_file).context("Failed to generate Rust code")?;
     let files = modules.into_iter().map(|(module, content)| File {
         name: Some(module.join(".") + ".rs"),
         content: Some(content),
