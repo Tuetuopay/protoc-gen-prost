@@ -5,6 +5,8 @@ use std::collections::BTreeMap;
 use anyhow::{Context, Result};
 use prost_build::Config;
 use prost_types::{compiler::code_generator_response::File, FileDescriptorProto};
+use quote::{format_ident, quote};
+use proc_macro2::TokenStream;
 
 /// PROST code generator
 ///
@@ -44,7 +46,7 @@ impl Generator {
 
         let files = modules.into_iter().map(|(module, content)| File {
             name: Some(module.join(".") + ".rs"),
-            content: Some(content),
+            content: Some(prettyplease::unparse(&syn::parse_file(&content).unwrap())),
             ..Default::default()
         });
         let mut files: Vec<_> = files.collect();
@@ -87,15 +89,15 @@ impl Mod {
         }
     }
 
-    fn render(&self, depth: usize) -> String {
-        let indent = " ".repeat(depth * 4);
-
-        let include = self.name.as_ref().map(|name| format!("{indent}include!(\"{name}.rs\");\n"));
+    fn render(&self) -> TokenStream {
+        let include = self.name.clone().map(|name| quote! { include!(#name); });
         let mods = self.submods.iter().map(|(name, module)| {
-            format!("{indent}pub mod {name} {{\n{}{indent}}}\n", module.render(depth + 1))
+            let name = format_ident!("{name}");
+            let module = module.render();
+            quote! { pub mod #name { #module } }
         });
 
-        mods.fold(include.unwrap_or_default(), |s, module| s + &module)
+        quote! { #include #(#mods)* }
     }
 }
 
@@ -104,5 +106,5 @@ fn gen_include_file<'a, M: Iterator<Item = &'a Vec<String>>>(modules: M) -> Stri
     for module in modules {
         root.push(module);
     }
-    root.render(0)
+    prettyplease::unparse(&syn::parse2(root.render()).unwrap())
 }

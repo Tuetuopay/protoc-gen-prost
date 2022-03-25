@@ -11,9 +11,13 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1"
+prettyplease = "0.1"
+proc-macro2 = "1"
 prost = { version = "0.9", default-features = false }
 prost-build = "0.9.1"
 prost-types = { version = "0.9", default-features = false }
+quote = "1"
+syn = "1"
 
 [patch.crates-io]
 prost = { git = "https://github.com/Tuetuopay/prost.git", branch = "api-expose" }
