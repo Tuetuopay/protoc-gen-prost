@@ -5,6 +5,7 @@ use prost::Message;
 use prost_types::compiler::{CodeGeneratorRequest, CodeGeneratorResponse, code_generator_response::File};
 
 mod args;
+mod utils;
 
 fn main() {
     let res = match gen_files() {
@@ -26,7 +27,11 @@ fn gen_files() -> Result<Vec<File>> {
         Err(e) => bail!("Failed to decode CodeGeneratorRequest: {e:?}"),
     };
 
-    let mut config = args::config_from_args(req.parameter())?;
+    let (mut config, opts) = args::config_from_opts(utils::split_escaped(req.parameter(), ','));
+    if !opts.is_empty() {
+        bail!("Unknown opts:\n - {}", opts.join("\n - "));
+    }
+
     let modules = config.generate(req.proto_file).context("Failed to generate Rust code")?;
     let files = modules.into_iter().map(|(module, content)| File {
         name: Some(module.join(".") + ".rs"),
