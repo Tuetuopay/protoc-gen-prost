@@ -26,6 +26,7 @@ impl Generator {
         for opt in opts {
             match opt.splitn(3, '=').collect::<Vec<_>>().as_slice() {
                 [] | [""] => (),
+                ["include_file"] => this.include_file = Some("mod.rs".to_owned()),
                 ["include_file", v] => this.include_file = Some(v.to_string()),
                 _ => leftovers.push(opt),
             }
