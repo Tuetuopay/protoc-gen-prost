@@ -130,9 +130,7 @@ impl Generator {
             None => quote! { include!(#name); },
         });
 
-        let out = prettyplease::unparse(&syn::parse2(quote! { #desc #file }).unwrap());
-        // Fix for a prettyparse issue: https://github.com/dtolnay/prettyplease/issues/10
-        out.replace(" ! (", "!(")
+        prettyplease::unparse(&syn::parse2(quote! { #desc #file }).unwrap())
     }
 }
 
