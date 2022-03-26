@@ -23,7 +23,6 @@ pub fn config_from_opts(opts: Vec<String>) -> (Config, Vec<String>) {
             ["disable_comments", v] => disable_comments.push(v.to_string()),
             ["extern_path", k, v] => { config.extern_path(*k, *v); },
             ["field_attribute", k, v] => { config.field_attribute(k, v); },
-            ["file_descriptor_set", v] => { config.file_descriptor_set_path(v); }
             ["retain_enum_prefix"] => { config.retain_enum_prefix(); }
             ["type_attribute", k, v] => { config.type_attribute(k, v); },
             _ => leftovers.push(opt),

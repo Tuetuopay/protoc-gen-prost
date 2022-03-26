@@ -4,25 +4,28 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs::read_to_string;
 
 use anyhow::{Context, Result};
+use prost::Message;
 use prost_build::Config;
-use prost_types::{compiler::code_generator_response::File, FileDescriptorProto};
+use prost_types::{compiler::code_generator_response::File, FileDescriptorProto, FileDescriptorSet};
 use quote::{format_ident, quote};
 use proc_macro2::TokenStream;
 
 /// PROST code generator
 ///
 /// This is a wrapper around the actual `prost_build` generator, but with extras
+#[derive(Default)]
 pub struct Generator {
     pub config: Config,
     include_file: Option<String>,
     manifest_tpl: Option<String>,
+    file_descriptor_set: Option<String>,
 }
 
 impl Generator {
     /// Create a new generator from a list of options, as given by protoc directly
     pub fn new_from_opts(opts: Vec<String>) -> (Self, Vec<String>) {
         let (config, opts) = crate::args::config_from_opts(opts);
-        let mut this = Self { config, include_file: None, manifest_tpl: None };
+        let mut this = Self { config, ..Default::default() };
         let mut leftovers = Vec::new();
         let mut include_file = false;
 
@@ -33,6 +36,10 @@ impl Generator {
                 ["include_file", v] => this.include_file = Some(v.to_string()),
                 ["gen_crate"] => this.manifest_tpl = Some("Cargo.toml.tpl".to_owned()),
                 ["gen_crate", v] => this.manifest_tpl = Some(v.to_string()),
+                ["file_descriptor_set"] => {
+                    this.file_descriptor_set = Some("file_descriptor_set.rs".to_owned())
+                }
+                ["file_descriptor_set", v] => this.file_descriptor_set = Some(v.to_string()),
                 _ => leftovers.push(opt),
             }
         }
@@ -56,27 +63,41 @@ impl Generator {
     pub fn generate(mut self, protos: Vec<FileDescriptorProto>) -> Result<Vec<File>> {
         let (manifest, proto_prefix, include_prefix) = match self.manifest_tpl {
             Some(ref path) => {
+                let fdesc = self.file_descriptor_set.is_some();
+                let toml = gen_manifest(path, &protos, fdesc).context("Cargo.toml gen failed")?;
                 let toml = File {
                     name: Some("Cargo.toml".to_owned()),
-                    content: Some(gen_manifest(path, &protos).context("Cargo.toml gen failed")?),
+                    content: Some(toml),
                     ..Default::default()
                 };
                 (Some(toml), "gen/", "src/")
             }
             None => (None, "", ""),
         };
+        let fdesc_set = self.file_descriptor_set.as_ref().map(|name| {
+            let set = FileDescriptorSet { file: protos.clone() }.encode_to_vec();
+            // So protoc check that the file contents indeed is made of printable characters, so
+            // best we can do is to emit a literal slice of bytes...
+            let bytes: Vec<_> = set.into_iter().map(|byte| format!("0x{byte:02x}")).collect();
+            let line = format!("pub const FILE_DESCRIPTOR_SET: &[u8] = &[{}];", bytes.join(", "));
+            File {
+                name: Some(format!("{proto_prefix}{name}")),
+                content: Some(prettify_str(&line).expect("Prettify file descriptor file failed")),
+                ..Default::default()
+            }
+        });
 
         let modules = self.config.generate(protos).context("Failed to generate Rust code")?;
 
-        let include_file = self.include_file.map(|name| File {
+        let include_file = self.include_file.as_ref().map(|name| File {
             name: Some(format!("{include_prefix}{name}")),
-            content: Some(gen_include_file(modules.keys(), self.manifest_tpl.is_some())),
+            content: Some(self.gen_include_file(modules.keys())),
             ..Default::default()
         });
 
         let files = modules.into_iter().map(|(module, content)| File {
             name: Some(format!("{proto_prefix}{}.rs", module.join("."))),
-            content: Some(prettyplease::unparse(&syn::parse_file(&content).unwrap())),
+            content: Some(prettify_str(&content).expect("Prettify generated file failed")),
             ..Default::default()
         });
         let mut files: Vec<_> = files.collect();
@@ -87,9 +108,36 @@ impl Generator {
         if let Some(manifest) = manifest {
             files.push(manifest);
         }
+        if let Some(fdesc_set) = fdesc_set {
+            files.push(fdesc_set);
+        }
 
         Ok(files)
     }
+
+    fn gen_include_file<'a>(&self, modules: impl Iterator<Item = &'a Vec<String>>) -> String {
+        let mut root = Mod::default();
+        for module in modules {
+            root.push(module);
+        }
+
+        let file = root.render(self.manifest_tpl.is_some());
+        let desc = self.file_descriptor_set.as_ref().map(|name| match self.manifest_tpl.as_ref() {
+            Some(_manifest) => quote! {
+                #[cfg(feature = "file_descriptor_set")]
+                include!(concat!(env!("CARGO_MANIFEST_DIR"), "/gen/", #name));
+            },
+            None => quote! { include!(#name); },
+        });
+
+        let out = prettyplease::unparse(&syn::parse2(quote! { #desc #file }).unwrap());
+        // Fix for a prettyparse issue: https://github.com/dtolnay/prettyplease/issues/10
+        out.replace(" ! (", "!(")
+    }
+}
+
+fn prettify_str(code: &str) -> Result<String> {
+    Ok(prettyplease::unparse(&syn::parse_file(code)?))
 }
 
 /// Helper structure to build a module tree, tagging each node with the potentially included
@@ -143,17 +191,6 @@ impl Mod {
     }
 }
 
-fn gen_include_file<'a, M: Iterator<Item = &'a Vec<String>>>(modules: M, krate: bool) -> String {
-    let mut root = Mod::default();
-    for module in modules {
-        root.push(module);
-    }
-    let out = prettyplease::unparse(&syn::parse2(root.render(krate)).unwrap());
-
-    // Fix for a prettyparse issue: https://github.com/dtolnay/prettyplease/issues/10
-    out.replace(" ! (", "!(")
-}
-
 fn build_deps(protos: &[FileDescriptorProto]) -> BTreeMap<String, BTreeSet<&str>> {
     // Since one proto package can be spread across multiple proto files, we cannot rely on the
     // deps of a single file.
@@ -172,10 +209,15 @@ fn build_deps(protos: &[FileDescriptorProto]) -> BTreeMap<String, BTreeSet<&str>
     deps
 }
 
-fn gen_manifest(tpl: &str, protos: &[FileDescriptorProto]) -> Result<String> {
+fn gen_manifest(tpl: &str, protos: &[FileDescriptorProto], fdesc: bool) -> Result<String> {
     let tpl = read_to_string(tpl).with_context(|| format!("Read template file {tpl} failed"))?;
 
-    let deps = build_deps(protos).into_iter().map(|(feat, deps)| {
+    let mut deps = build_deps(protos);
+    if fdesc {
+        deps.insert("file_descriptor_set".to_owned(), Default::default());
+    }
+
+    let deps = deps.into_iter().map(|(feat, deps)| {
         let deps = deps.iter().map(|dep| format!("\"{dep}\"")).collect::<Vec<_>>();
         format!(r#""{feat}" = [{}]"#, deps.join(", "))
     });
