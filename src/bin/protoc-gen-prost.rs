@@ -4,11 +4,7 @@ use anyhow::{Result, Context, bail};
 use prost::Message;
 use prost_types::compiler::{CodeGeneratorRequest, CodeGeneratorResponse, code_generator_response::File};
 
-mod args;
-mod generator;
-mod utils;
-
-use generator::Generator;
+use protoc_gen_prost::{Generator, split_escaped};
 
 fn main() {
     let res = match gen_files() {
@@ -30,7 +26,7 @@ fn gen_files() -> Result<Vec<File>> {
         Err(e) => bail!("Failed to decode CodeGeneratorRequest: {e:?}"),
     };
 
-    let (gen, opts) = Generator::new_from_opts(utils::split_escaped(req.parameter(), ','));
+    let (gen, opts) = Generator::new_from_opts(split_escaped(req.parameter(), ','));
     if !opts.is_empty() {
         bail!("Unknown opts:\n - {}", opts.join("\n - "));
     }
