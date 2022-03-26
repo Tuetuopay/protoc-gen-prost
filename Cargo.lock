@@ -152,7 +152,7 @@ dependencies = [
 [[package]]
 name = "prost"
 version = "0.9.0"
-source = "git+https://github.com/Tuetuopay/prost.git?branch=api-expose#e5adebb5eaa24fe0fb37eb37f2d35472ac557249"
+source = "git+https://github.com/tokio-rs/prost.git?branch=master#2f6b6f1cd01f3e9b12db165304a3e92fe3dfe929"
 dependencies = [
  "bytes",
  "prost-derive",
@@ -161,7 +161,7 @@ dependencies = [
 [[package]]
 name = "prost-build"
 version = "0.9.1"
-source = "git+https://github.com/Tuetuopay/prost.git?branch=api-expose#e5adebb5eaa24fe0fb37eb37f2d35472ac557249"
+source = "git+https://github.com/tokio-rs/prost.git?branch=master#2f6b6f1cd01f3e9b12db165304a3e92fe3dfe929"
 dependencies = [
  "bytes",
  "heck",
@@ -180,7 +180,7 @@ dependencies = [
 [[package]]
 name = "prost-derive"
 version = "0.9.0"
-source = "git+https://github.com/Tuetuopay/prost.git?branch=api-expose#e5adebb5eaa24fe0fb37eb37f2d35472ac557249"
+source = "git+https://github.com/tokio-rs/prost.git?branch=master#2f6b6f1cd01f3e9b12db165304a3e92fe3dfe929"
 dependencies = [
  "anyhow",
  "itertools",
@@ -192,7 +192,7 @@ dependencies = [
 [[package]]
 name = "prost-types"
 version = "0.9.0"
-source = "git+https://github.com/Tuetuopay/prost.git?branch=api-expose#e5adebb5eaa24fe0fb37eb37f2d35472ac557249"
+source = "git+https://github.com/tokio-rs/prost.git?branch=master#2f6b6f1cd01f3e9b12db165304a3e92fe3dfe929"
 dependencies = [
  "bytes",
  "prost",
@@ -203,6 +203,7 @@ name = "protoc-gen-prost"
 version = "0.9.1"
 dependencies = [
  "anyhow",
+ "itertools",
  "prettyplease",
  "proc-macro2",
  "prost",

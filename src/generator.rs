@@ -4,8 +4,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs::read_to_string;
 
 use anyhow::{Context, Result};
+use itertools::Itertools;
 use prost::Message;
-use prost_build::Config;
+use prost_build::{Config, Module};
 use prost_types::{compiler::code_generator_response::File, FileDescriptorProto, FileDescriptorSet};
 use quote::{format_ident, quote};
 use proc_macro2::TokenStream;
@@ -78,8 +79,8 @@ impl Generator {
             let set = FileDescriptorSet { file: protos.clone() }.encode_to_vec();
             // So protoc check that the file contents indeed is made of printable characters, so
             // best we can do is to emit a literal slice of bytes...
-            let bytes: Vec<_> = set.into_iter().map(|byte| format!("0x{byte:02x}")).collect();
-            let line = format!("pub const FILE_DESCRIPTOR_SET: &[u8] = &[{}];", bytes.join(", "));
+            let bytes = set.into_iter().map(|byte| format!("0x{byte:02x}")).join(", ");
+            let line = format!("pub const FILE_DESCRIPTOR_SET: &[u8] = &[{bytes}];");
             File {
                 name: Some(format!("{proto_prefix}{name}")),
                 content: Some(prettify_str(&line).expect("Prettify file descriptor file failed")),
@@ -87,7 +88,11 @@ impl Generator {
             }
         });
 
-        let modules = self.config.generate(protos).context("Failed to generate Rust code")?;
+        let protos = protos.into_iter().map(|proto| {
+            (Module::from_protobuf_package_name(proto.package()), proto)
+        });
+        let modules =
+            self.config.generate(protos.collect()).context("Failed to generate Rust code")?;
 
         let include_file = self.include_file.as_ref().map(|name| File {
             name: Some(format!("{include_prefix}{name}")),
@@ -96,7 +101,7 @@ impl Generator {
         });
 
         let files = modules.into_iter().map(|(module, content)| File {
-            name: Some(format!("{proto_prefix}{}.rs", module.join("."))),
+            name: Some(format!("{proto_prefix}{}.rs", module.parts().join("."))),
             content: Some(prettify_str(&content).expect("Prettify generated file failed")),
             ..Default::default()
         });
@@ -115,10 +120,10 @@ impl Generator {
         Ok(files)
     }
 
-    fn gen_include_file<'a>(&self, modules: impl Iterator<Item = &'a Vec<String>>) -> String {
+    fn gen_include_file<'a>(&self, modules: impl Iterator<Item = &'a Module>) -> String {
         let mut root = Mod::default();
         for module in modules {
-            root.push(module);
+            root.push(module.parts().collect());
         }
 
         let file = root.render(self.manifest_tpl.is_some());
@@ -150,8 +155,8 @@ struct Mod {
 
 impl Mod {
     /// Push a package to include in the module.
-    fn push(&mut self, package: &[String]) {
-        if let [name, left @ ..] = package {
+    fn push(&mut self, package: Vec<&str>) {
+        if let [name, left @ ..] = package.as_slice() {
             self.add(package.to_owned(), name, left);
         }
     }
@@ -160,7 +165,7 @@ impl Mod {
     /// - `name` is the current module name we are int
     /// - `left` is what's left of the package, i.e. submodules after `name` leading up to the leaf
     ///   module with the actual file import
-    fn add(&mut self, package: Vec<String>, name: &str, left: &[String]) {
+    fn add(&mut self, package: Vec<&str>, name: &str, left: &[&str]) {
         let submod = self.submods.entry(name.to_owned()).or_default();
         match left {
             [] => submod.name = Some(package.join(".")),
@@ -215,12 +220,12 @@ fn gen_manifest(tpl: &str, protos: &[FileDescriptorProto], fdesc: bool) -> Resul
         deps.insert("file_descriptor_set".to_owned(), Default::default());
     }
 
-    let deps = deps.into_iter().map(|(feat, deps)| {
-        let deps = deps.iter().map(|dep| format!("\"{dep}\"")).collect::<Vec<_>>();
-        format!(r#""{feat}" = [{}]"#, deps.join(", "))
+    let mut deps = deps.into_iter().map(|(feat, deps)| {
+        let deps = deps.iter().map(|dep| format!("\"{dep}\"")).join(", ");
+        format!(r#""{feat}" = [{deps}]"#)
     });
 
-    let manifest = tpl.replace("{{ features }}", &deps.collect::<Vec<_>>().join("\n"));
+    let manifest = tpl.replace("{{ features }}", &deps.join("\n"));
 
     Ok(manifest)
 }

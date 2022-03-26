@@ -11,6 +11,7 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1"
+itertools = "0.10"
 prettyplease = "0.1"
 proc-macro2 = "1"
 prost = { version = "0.9", default-features = false }
@@ -20,6 +21,6 @@ quote = "1"
 syn = "1"
 
 [patch.crates-io]
-prost = { git = "https://github.com/Tuetuopay/prost.git", branch = "api-expose" }
-prost-build = { git = "https://github.com/Tuetuopay/prost.git", branch = "api-expose" }
-prost-types = { git = "https://github.com/Tuetuopay/prost.git", branch = "api-expose" }
+prost = { git = "https://github.com/tokio-rs/prost.git", branch = "master" }
+prost-build = { git = "https://github.com/tokio-rs/prost.git", branch = "master" }
+prost-types = { git = "https://github.com/tokio-rs/prost.git", branch = "master" }
