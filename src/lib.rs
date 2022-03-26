@@ -9,7 +9,6 @@
 
 mod args;
 mod generator;
-mod utils;
+pub mod utils;
 
 pub use generator::Generator;
-pub use utils::split_escaped;
