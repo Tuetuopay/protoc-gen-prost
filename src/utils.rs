@@ -1,6 +1,6 @@
 use std::io::{Read, Write};
 
-use anyhow::{anyhow, Result, Context, bail};
+use anyhow::{anyhow, Result, Context};
 use prost::Message;
 use prost_types::compiler::{CodeGeneratorRequest, CodeGeneratorResponse};
 
