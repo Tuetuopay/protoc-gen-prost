@@ -30,7 +30,7 @@ impl Generator {
         let mut include_file = false;
 
         for opt in opts {
-            match opt.splitn(3, '=').collect::<Vec<_>>().as_slice() {
+            match opt.trim().splitn(3, '=').collect::<Vec<_>>().as_slice() {
                 [] | [""] => (),
                 ["include_file"] => include_file = true,
                 ["include_file", v] => this.include_file = Some(v.to_string()),

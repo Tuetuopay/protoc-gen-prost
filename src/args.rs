@@ -14,7 +14,7 @@ pub fn config_from_opts(opts: Vec<String>) -> (Config, Vec<String>) {
     let mut disable_comments = Vec::new();
 
     for opt in opts {
-        match opt.splitn(3, '=').collect::<Vec<_>>().as_slice() {
+        match opt.trim().splitn(3, '=').collect::<Vec<_>>().as_slice() {
             [] | [""] => (),
             ["btree_map", v] => map_types.push(v.to_string()),
             ["bytes", v] => byte_types.push(v.to_string()),
